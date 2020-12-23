@@ -1,12 +1,16 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package com.azure.messaging.eventhubs;
+package jimwrightcz;
 
 
 import com.azure.core.amqp.AmqpTransportType;
 import com.azure.core.amqp.ProxyAuthenticationType;
 import com.azure.core.amqp.ProxyOptions;
+import com.azure.messaging.eventhubs.EventData;
+import com.azure.messaging.eventhubs.EventDataBatch;
+import com.azure.messaging.eventhubs.EventHubClientBuilder;
+import com.azure.messaging.eventhubs.EventHubProducerClient;
 
 import java.net.InetSocketAddress;
 import java.net.Proxy;
@@ -25,6 +29,21 @@ public class PublishEventsWithWebSocketsAndProxy {
      * @param args Unused arguments to the program.
      */
     public static void main(String[] args) {
+        if (args.length < 3) {
+            System.err.println("Command line arguments: namespace key eventHub [sasPolicy [proxyHost [proxyPort]]]");
+        }
+        int arg = 0;
+        String namespace = args[arg++];
+        String key = args[arg++];
+        String eventHub = args[arg++];
+        String sasPolicy = args.length > arg ? args[arg] : "RootManageSharedAccessKey";
+        // If the proxy is accessible from appServer you can use this to make it accessible as localhost
+        // $ ssh -L 3128:proxyHost:3128 appServer
+        arg++;
+        String proxyHost = args.length > arg ? args[arg] : "localhost";
+        arg++;
+        int proxyPort = args.length > arg ? Integer.decode(args[arg]) : 3128;
+
         List<EventData> telemetryEvents = Arrays.asList(
             new EventData("Roast beef".getBytes(UTF_8)),
             new EventData("Cheese".getBytes(UTF_8)),
@@ -36,14 +55,16 @@ public class PublishEventsWithWebSocketsAndProxy {
         // 2. Creating an Event Hub instance.
         // 3. Creating a "Shared access policy" for your Event Hub instance.
         // 4. Copying the connection string from the policy's properties.
-        String connectionString = "Endpoint={endpoint};SharedAccessKeyName={sharedAccessKeyName};SharedAccessKey={sharedAccessKey};EntityPath={eventHubName}";
+        String connectionString =
+            String.format("Endpoint=sb://%s.servicebus.windows.net/;SharedAccessKeyName=%s;SharedAccessKey=%s;EntityPath=%s",
+                namespace, sasPolicy, key, eventHub);
 
         // By default, the AMQP port 5671 is used, but clients can use web sockets, port 443.
         // When using web sockets, developers can specify proxy options.
         // ProxyOptions.SYSTEM_DEFAULTS can be used if developers want to use the JVM configured proxy.
-        ProxyOptions proxyOptions = new ProxyOptions(ProxyAuthenticationType.DIGEST,
-            new Proxy(Proxy.Type.HTTP, InetSocketAddress.createUnresolved("10.13.1.3", 9992)),
-            "digest-user", "digest-user-password");
+        ProxyOptions proxyOptions = new ProxyOptions(ProxyAuthenticationType.NONE,
+            new Proxy(Proxy.Type.HTTP, InetSocketAddress.createUnresolved(proxyHost, proxyPort)),
+            null, null);
 
         // Instantiate a client that will be used to call the service.
         EventHubProducerClient producer = new EventHubClientBuilder()
